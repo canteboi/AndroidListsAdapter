@@ -8,7 +8,9 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.example.ibanezf.androidweatherapp.R;
@@ -40,6 +42,8 @@ public class MainActivity extends AppCompatActivity {
     @Bind(R.id.precipValue) TextView mPrecipValue;
     @Bind(R.id.summaryLabel) TextView mSummaryLabel;
     @Bind(R.id.iconImageView) ImageView mIconImageView;
+    @Bind(R.id.refreshImageView) ImageView mRefreshImageView;
+    @Bind(R.id.progressBar) ProgressBar mProgressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,16 +51,29 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-        setupApi();
+        mProgressBar.setVisibility(View.INVISIBLE);
+        final double latitude = 14.6042000;
+        final double longhitude = 120.9822000;
+
+        getForeCast(latitude, longhitude);
+        mRefreshImageView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                getForeCast(latitude, longhitude);
+            }
+        });
+
     }
 
-    private void setupApi() {
+
+
+    private void getForeCast(double latitude, double longhitude) {
 
         if (isNetWorkAvailable()) {
+            toggleRefresh();
             String url = getString(R.string.forecast_url);
             String apikey = "134806da256b7476535cc3ebfc240aad";
-            double latitude = 14.6042000;
-            double longhitude = 120.9822000;
+
             String forecastUrl = String.format(url
                     , apikey
                     , latitude + ""
@@ -69,11 +86,24 @@ public class MainActivity extends AppCompatActivity {
             call.enqueue(new Callback() {
                 @Override
                 public void onFailure(Request request, IOException e) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            toggleRefresh();
+                        }
+                    });
                     alertuserAboutError();
                 }
 
                 @Override
                 public void onResponse(Response response) throws IOException {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            toggleRefresh();
+                        }
+                    });
+
                     try {
                         //Response response = call.execute();
                         if (!response.isSuccessful()) {
@@ -105,6 +135,18 @@ public class MainActivity extends AppCompatActivity {
 
             dialog.show(getFragmentManager(), "error_dialog");
         }
+    }
+
+    private void toggleRefresh() {
+
+        if (mProgressBar.getVisibility() == View.INVISIBLE) {
+            mProgressBar.setVisibility(View.VISIBLE);
+            mRefreshImageView.setVisibility(View.INVISIBLE);
+        }else{
+            mProgressBar.setVisibility(View.INVISIBLE);
+            mRefreshImageView.setVisibility(View.VISIBLE);
+        }
+
     }
 
     private void updateDisplay() {
