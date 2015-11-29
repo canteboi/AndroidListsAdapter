@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Stormy</string>
     <string name="forecast_url" >https://api.forecast.io/forecast/%1$s/%2$s,%3$s</string>
-    <string name="dialog_positive_confirm">OK</string>
     <string name="error_title">Oops! Sorry!</string>
     <string name="error_message">There was an error. Please try again.</string>
     <string name="network_unavailable_title">Network is unavailable!</string>
     <string name="network_unavailable_message">Cannot refresh data.</string>
+    <string name="dialog_positive_confirm">OK</string>
 </resources>
