@@ -2,6 +2,7 @@ package com.example.ibanezf.androidweatherapp.ui;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
+import android.location.Location;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.support.v4.content.ContextCompat;
@@ -12,9 +13,17 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.example.ibanezf.androidweatherapp.R;
+import com.example.ibanezf.androidweatherapp.model.CurrentLocation;
 import com.example.ibanezf.androidweatherapp.model.CurrentWeather;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.location.LocationListener;
 import com.squareup.okhttp.Call;
 import com.squareup.okhttp.Callback;
 import com.squareup.okhttp.OkHttpClient;
@@ -29,13 +38,37 @@ import java.io.IOException;
 import butterknife.Bind;
 import butterknife.ButterKnife;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements
+        OnConnectionFailedListener {
+
     private static final String TAG = MainActivity.class.getSimpleName();
     private final OkHttpClient client = new OkHttpClient();
 
     private CurrentWeather mCurrentWeather;
+    private CurrentLocation mCurrentLocation;
 
-    //private TextView mTemperatureLabel;
+    private double mLatitude = 14.6042000;
+    private double mLonghitude = 120.9822000;
+
+    //region Properties
+    public double getLatitude() {
+        return mLatitude;
+    }
+
+    public void setLatitude(double latitude) {
+        this.mLatitude = latitude;
+    }
+
+    public double getLonghitude() {
+        return mLonghitude;
+    }
+
+    public void setLonghitude(double longhitude) {
+        this.mLonghitude = longhitude;
+    }
+
+
+    //region Bindings
     @Bind(R.id.timeLabel) TextView mTimeLabel;
     @Bind(R.id.temperatureLabel) TextView mTemperatureLabel;
     @Bind(R.id.humidityValue) TextView mHumidityValue;
@@ -44,7 +77,10 @@ public class MainActivity extends AppCompatActivity {
     @Bind(R.id.iconImageView) ImageView mIconImageView;
     @Bind(R.id.refreshImageView) ImageView mRefreshImageView;
     @Bind(R.id.progressBar) ProgressBar mProgressBar;
+    @Bind(R.id.locationLabel) TextView mLocationLabel;
+    //endregion
 
+    //region Overrides
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,14 +88,20 @@ public class MainActivity extends AppCompatActivity {
         ButterKnife.bind(this);
 
         mProgressBar.setVisibility(View.INVISIBLE);
-        final double latitude = 14.6042000;
-        final double longhitude = 120.9822000;
 
-        getForeCast(latitude, longhitude);
+        getLocation();
+        getForeCast(mLatitude, mLonghitude);
         mRefreshImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                getForeCast(latitude, longhitude);
+                Location location = mCurrentLocation.getLocation();
+
+                if (location != null) {
+                    setLatitude(location.getLatitude());
+                    setLonghitude(location.getLongitude());
+                }
+
+                getForeCast(getLatitude(), getLonghitude());
             }
         });
 
@@ -67,12 +109,52 @@ public class MainActivity extends AppCompatActivity {
 
 
 
+
+
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        mCurrentLocation.Connect();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (mCurrentLocation.checkPlayServices())
+        {
+            mCurrentLocation.startLocationUpdates();
+        }
+
+
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        mCurrentLocation.Disconnect();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mCurrentLocation.stopLocationUpdates();
+    }
+    //endregion
+
     private void getForeCast(double latitude, double longhitude) {
 
         if (isNetWorkAvailable()) {
             toggleRefresh();
             String url = getString(R.string.forecast_url);
             String apikey = "134806da256b7476535cc3ebfc240aad";
+
 
             String forecastUrl = String.format(url
                     , apikey
@@ -134,10 +216,12 @@ public class MainActivity extends AppCompatActivity {
             dialog.setAlertMessage(message);
 
             dialog.show(getFragmentManager(), "error_dialog");
+
         }
     }
 
     private void toggleRefresh() {
+
 
         if (mProgressBar.getVisibility() == View.INVISIBLE) {
             mProgressBar.setVisibility(View.VISIBLE);
@@ -155,6 +239,7 @@ public class MainActivity extends AppCompatActivity {
         mHumidityValue.setText(mCurrentWeather.getHumidity() + "");
         mPrecipValue.setText(mCurrentWeather.getPrecipChance() + "");
         mSummaryLabel.setText(mCurrentWeather.getSummary());
+        mLocationLabel.setText(mCurrentWeather.getTimeZone());
 
         Drawable drawable = ContextCompat.getDrawable(this, mCurrentWeather.getIconId());
         mIconImageView.setImageDrawable(drawable);
@@ -197,9 +282,51 @@ public class MainActivity extends AppCompatActivity {
     private void alertuserAboutError() {
         AlertDialogFragment dialog = new AlertDialogFragment();
         dialog.show(getFragmentManager(),"error_dialog");
+    }
 
+    private void getLocation() {
+        mCurrentLocation = new CurrentLocation(this, getApplicationContext(), this);
+        //mCurrentLocation.setListener(this);
 
+        if (mCurrentLocation.checkPlayServices()) {
 
+            // Building the GoogleApi client
+            mCurrentLocation.buildGoogleApiClient();
+
+            mCurrentLocation.createLocationRequest();
+
+            Location location = mCurrentLocation.getLocation();
+
+            if (location == null){
+                AlertDialogFragment dialog = new AlertDialogFragment();
+                String title = "Location Not found.";
+                String message = "Couldn't get the location. " +
+                        "Make sure location is enabled on the device. " +
+                        "Using MANILA as default."
+                        ;
+                dialog.setIsCustomAlert(true);
+                dialog.setAlertTitle(title);
+                dialog.setAlertMessage(message);
+
+                dialog.show(getFragmentManager(), "error_dialog");
+            }
+            else {
+
+                setLatitude(location.getLatitude());
+                setLonghitude(location.getLongitude());
+            }
+        }
+//        else {
+//            AlertDialogFragment dialog = new AlertDialogFragment();
+//            String title = "Google Play Services Not found.";
+//            String message = "Couldn't get the location. " +
+//                    "Make sure Google Play Services is allowed.";
+//            dialog.setIsCustomAlert(true);
+//            dialog.setAlertTitle(title);
+//            dialog.setAlertMessage(message);
+//
+//            dialog.show(getFragmentManager(), "error_dialog");
+//        }
     }
 
 
